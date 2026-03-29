@@ -23,7 +23,22 @@ from nano_rlvr.utils import (
     compute_kl_divergence as compute_kl_divergence,
 )
 from nano_rlvr.utils import (
+    forward_logps as forward_logps,
+)
+from nano_rlvr.utils import (
+    get_task as get_task,
+)
+from nano_rlvr.utils import (
+    kl_penalty as kl_penalty,
+)
+from nano_rlvr.utils import (
+    make_ref_model as make_ref_model,
+)
+from nano_rlvr.utils import (
     normalize_advantages as normalize_advantages,
+)
+from nano_rlvr.utils import (
+    score_completions as score_completions,
 )
 from nano_rlvr.utils import (
     set_seed as set_seed,

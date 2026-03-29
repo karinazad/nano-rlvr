@@ -1,9 +1,149 @@
 """Shared utilities for RLVR training."""
 
+import copy
 import random
 
 import numpy as np
 import torch
+
+from nano_rlvr.data import generate_arithmetic_problems, generate_countdown_problems
+from nano_rlvr.model import get_per_token_logps
+from nano_rlvr.rewards import check_arithmetic, check_countdown
+
+
+def get_task(task_name):
+    """Return the problem generator for a given task name.
+
+    Parameters
+    ----------
+    task_name : str
+        One of "arithmetic" or "countdown".
+
+    Returns
+    -------
+    callable
+        Problem generator function.
+    """
+    tasks = {
+        "arithmetic": generate_arithmetic_problems,
+        "countdown": generate_countdown_problems,
+    }
+    if task_name not in tasks:
+        raise ValueError(f"Unknown task: {task_name}. Choose from {list(tasks)}")
+    return tasks[task_name]
+
+
+def score_completions(completions, prompts, answers, task_name, group_size=1):
+    """Compute verifiable rewards for a batch of completions.
+
+    Parameters
+    ----------
+    completions : list of str
+        Model completions.
+    prompts : list of str
+        Original prompts (one per group of completions).
+    answers : list
+        Expected answers (one per prompt).
+    task_name : str
+        Task type for reward dispatch.
+    group_size : int
+        Number of completions per prompt.
+
+    Returns
+    -------
+    list of float
+        Reward for each completion.
+    """
+    rewards = []
+    for i, completion in enumerate(completions):
+        prompt_idx = i // group_size
+        if task_name == "arithmetic":
+            r = check_arithmetic(completion, answers[prompt_idx])
+        else:
+            nums_str = prompts[prompt_idx].split("[")[1].split("]")[0]
+            numbers = [int(n.strip()) for n in nums_str.split(",")]
+            r = check_countdown(completion, numbers, answers[prompt_idx])
+        rewards.append(r)
+    return rewards
+
+
+def make_ref_model(model):
+    """Create a frozen copy of a model for KL reference.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The model to copy.
+
+    Returns
+    -------
+    torch.nn.Module
+        Frozen deepcopy.
+    """
+    ref = copy.deepcopy(model)
+    ref.eval()
+    for p in ref.parameters():
+        p.requires_grad = False
+    return ref
+
+
+def forward_logps(model, full_ids, full_mask, prompt_len, comp_len):
+    """Forward pass to get per-token log-probs over the completion portion.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The language model.
+    full_ids : torch.Tensor
+        Full token ids (prompt + completion), shape (batch, seq_len).
+    full_mask : torch.Tensor
+        Attention mask, shape (batch, seq_len).
+    prompt_len : int
+        Length of the prompt portion.
+    comp_len : int
+        Length to truncate the completion portion to.
+
+    Returns
+    -------
+    torch.Tensor
+        Per-token log-probs over completion, shape (batch, comp_len).
+    """
+    logits = model(input_ids=full_ids, attention_mask=full_mask).logits
+    log_probs = torch.log_softmax(logits[:, :-1, :], dim=-1)
+    token_logps = log_probs.gather(2, full_ids[:, 1:].unsqueeze(-1)).squeeze(-1)
+    return token_logps[:, prompt_len - 1 :][:, :comp_len]
+
+
+def kl_penalty(comp_logps, ref_model, full_ids, full_mask, prompt_len, comp_len, comp_mask):
+    """Compute mean per-sequence KL divergence against a reference model.
+
+    Parameters
+    ----------
+    comp_logps : torch.Tensor
+        Current policy completion log-probs, shape (batch, comp_len).
+    ref_model : torch.nn.Module
+        Frozen reference model.
+    full_ids : torch.Tensor
+        Full token ids.
+    full_mask : torch.Tensor
+        Attention mask.
+    prompt_len : int
+        Prompt length.
+    comp_len : int
+        Completion length.
+    comp_mask : torch.Tensor
+        Completion mask.
+
+    Returns
+    -------
+    torch.Tensor
+        Scalar mean KL divergence.
+    """
+    ref_logps = get_per_token_logps(ref_model, full_ids, full_mask)
+    ref_comp_logps = ref_logps[:, prompt_len - 1 :][:, :comp_len]
+    kl = comp_logps - ref_comp_logps
+    kl_per_seq = (kl * comp_mask).sum(dim=1) / comp_mask.sum(dim=1).clamp(min=1)
+    return kl_per_seq.mean()
 
 
 def compute_kl_divergence(logps_current, logps_reference):

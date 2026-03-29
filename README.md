@@ -1,105 +1,74 @@
 # nano-rlvr
 
-Minimal, readable implementation of **Reinforcement Learning with Verifiable Rewards (RLVR)** — the technique behind [DeepSeek-R1](https://arxiv.org/abs/2501.12948)'s reasoning capabilities.
-
-nanoGPT-style: single-GPU, no infra bloat, readable top-to-bottom.
+Minimal implementation of Reinforcement Learning with Verifiable Rewards (RLVR) — the technique behind [DeepSeek-R1](https://arxiv.org/abs/2501.12948). nanoGPT-style: single GPU, no infra bloat, readable top-to-bottom.
 
 ## What is RLVR?
 
-Standard RLHF trains a reward model from human preferences, then optimizes a policy against it. **RLVR skips the reward model entirely** — instead, it uses *programmatically verifiable* rewards (did the model get the right answer to a math problem?). This is:
-
-- **Simpler** — no reward model training, no preference data collection
-- **Cheaper** — reward computation is a function call, not a neural network forward pass
-- **Surprisingly effective** — has been shown to elicit chain-of-thought reasoning from base models
+In RLHF you train a reward model from human preferences. RLVR skips that — rewards come from programmatic verification (did the model get the math problem right?). No reward model, no preference data. Just a function that returns 0 or 1.
 
 ## Algorithms
 
 ### REINFORCE (`train_reinforce.py`)
 
-The simplest policy gradient method. For each prompt:
+Simplest policy gradient. For each prompt:
 
-1. Generate one completion
-2. Check if the answer is correct (reward = 0 or 1)
-3. Update: `loss = -(reward - baseline) * log_prob(completion)`
-4. Add KL penalty against reference model to prevent collapse
+1. Generate a completion
+2. Check the answer (reward = 0 or 1)
+3. `loss = -(reward - baseline) * log_prob(completion)`
+4. KL penalty against a frozen reference model to prevent collapse
 
-The baseline is a running mean of rewards, which reduces gradient variance.
+Baseline is a running mean of rewards.
 
 ### GRPO (`train_grpo.py`)
 
-**Group Relative Policy Optimization** — DeepSeek-R1's algorithm. The key idea: generate *K* completions per prompt, then compute advantages *relative to the group*:
+Group Relative Policy Optimization — the DeepSeek-R1 algorithm. For each prompt, generate K completions and compute advantages relative to the group:
 
 ```
 advantage_i = (reward_i - mean(group_rewards)) / std(group_rewards)
 ```
 
-This eliminates the need for a critic/value network. Then optimize with PPO-style clipping:
+No critic network needed. Then PPO-style clipped optimization:
 
 ```
 ratio = pi(a|s) / pi_old(a|s)
-loss = -min(ratio * advantage, clip(ratio, 1-eps, 1+eps) * advantage)
+loss = -min(ratio * adv, clip(ratio, 1-eps, 1+eps) * adv)
 ```
 
-Multiple optimization epochs per batch of generated data, plus a KL penalty against the reference model.
+Multiple epochs per batch, plus KL penalty.
 
 ## Quickstart
 
 ```bash
-# Install with uv
 uv sync
-
-# With dev extras (wandb, ruff, pre-commit)
-uv sync --all-extras
-```
-
-### Train with REINFORCE
-
-```bash
 python train_reinforce.py
-```
-
-### Train with GRPO
-
-```bash
 python train_grpo.py
 ```
 
-Both scripts auto-detect GPU availability and fall back to CPU (slow but works for debugging).
+Dev extras (wandb, ruff, pre-commit): `uv sync --all-extras`
+
+Both scripts fall back to CPU if CUDA isn't available.
 
 ## What to expect
 
-- **Reward curves** should increase over ~100-200 steps as the model learns to produce correct answers
-- **Sample completions** are printed periodically — watch for emerging step-by-step reasoning
-- Arithmetic task is easier and converges faster; countdown is harder but more interesting
-- On CPU with the default 0.5B model, expect ~1-5 seconds per step for REINFORCE, more for GRPO (K completions per prompt)
+Reward should climb over ~100-200 steps. Sample completions are printed periodically — you can watch the model start producing step-by-step reasoning. Arithmetic converges faster; countdown is harder.
 
-## Project structure
+## Structure
 
 ```
-nano-rlvr/
-├── README.md
-├── pyproject.toml
-├── src/
-│   └── nano_rlvr/
-│       ├── __init__.py
-│       ├── model.py          # Load/wrap pretrained LM, batched generation
-│       ├── rewards.py        # Verifiable reward: check_arithmetic, check_countdown
-│       ├── data.py           # Online problem generators (no dataset files)
-│       └── utils.py          # KL divergence, advantage normalization, logging
-├── train_reinforce.py        # REINFORCE + verifiable rewards
-└── train_grpo.py             # GRPO (DeepSeek-R1 algorithm)
+src/nano_rlvr/
+  model.py      Model loading, batched generation with log-probs
+  rewards.py    Verifiable reward functions (arithmetic, countdown)
+  data.py       Online problem generators
+  utils.py      KL divergence, advantage normalization, logging
+
+train_reinforce.py   REINFORCE + verifiable rewards
+train_grpo.py        GRPO (DeepSeek-R1 algorithm)
 ```
 
-## Design decisions
-
-- **HuggingFace transformers for model loading** — the "nano" is about the RL algorithm, not reimplementing model infra. Default model: `Qwen/Qwen2.5-0.5B`.
-- **Online problem generation** — no static datasets, no data loading pipelines.
-- **Single GPU, vanilla PyTorch** — no DeepSpeed, no FSDP, no vLLM.
-- **Self-contained training scripts** — each readable top-to-bottom with a config dataclass and a training loop.
-- **Functional style** — no trainer classes, no callback systems. Just functions and a for-loop.
+The "nano" is about the RL algorithm, not the model — we use HuggingFace transformers to load `Qwen/Qwen2.5-0.5B`. No DeepSpeed, no FSDP, no vLLM. No trainer classes or callback systems. Just functions and a for-loop.
 
 ## References
 
-- [DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning](https://arxiv.org/abs/2501.12948) — the GRPO algorithm and RLVR approach
-- [GRPO: Group Relative Policy Optimization](https://arxiv.org/abs/2402.03300) — the original GRPO paper (DeepSeek-Math)
-- [nanoGPT](https://github.com/karpathy/nanoGPT) — inspiration for the "nano" philosophy
+- [DeepSeek-R1](https://arxiv.org/abs/2501.12948) — GRPO + RLVR for reasoning
+- [DeepSeek-Math](https://arxiv.org/abs/2402.03300) — original GRPO paper
+- [nanoGPT](https://github.com/karpathy/nanoGPT)
