@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>nano-rlvr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0c0c0e;
+    --surface: #141418;
+    --border: #222228;
+    --text: #c8c8d0;
+    --text-dim: #6e6e7a;
+    --accent: #e8dcc8;
+    --green: #7ec88b;
+    --red: #d47272;
+    --blue: #72a0d4;
+    --mono: 'IBM Plex Mono', monospace;
+    --serif: 'Newsreader', Georgia, serif;
+  }
+
+  html { font-size: 16px; scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.875rem;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* grain overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 200px;
+    z-index: 9999;
+  }
+
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  /* header */
+  header {
+    padding: 6rem 0 4rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  header .label {
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 1.5rem;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 3.2rem;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin-bottom: 1.5rem;
+  }
+
+  header p {
+    color: var(--text-dim);
+    max-width: 520px;
+    line-height: 1.8;
+  }
+
+  header .links {
+    margin-top: 2rem;
+    display: flex;
+    gap: 1.5rem;
+  }
+
+  header .links a {
+    color: var(--text);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 2px;
+    transition: border-color 0.2s;
+  }
+
+  header .links a:hover {
+    border-color: var(--accent);
+  }
+
+  /* sections */
+  section {
+    padding: 4rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  section:last-of-type { border-bottom: none; }
+
+  .section-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 2rem;
+  }
+
+  h2 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 1.6rem;
+    color: var(--accent);
+    letter-spacing: -0.01em;
+    margin-bottom: 1rem;
+  }
+
+  h3 {
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text);
+    margin-bottom: 0.75rem;
+    margin-top: 2.5rem;
+  }
+
+  h3:first-of-type { margin-top: 0; }
+
+  p { margin-bottom: 1rem; }
+
+  .dim { color: var(--text-dim); }
+
+  /* comparison block */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin: 2rem 0;
+  }
+
+  .compare-cell {
+    background: var(--surface);
+    padding: 1.5rem;
+  }
+
+  .compare-cell .tag {
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+
+  .compare-cell .tag.old { color: var(--red); }
+  .compare-cell .tag.new { color: var(--green); }
+
+  .compare-cell ul {
+    list-style: none;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+  }
+
+  .compare-cell ul li {
+    padding: 0.25rem 0;
+  }
+
+  .compare-cell ul li::before {
+    content: '';
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    margin-right: 0.75rem;
+    position: relative;
+    top: -1px;
+  }
+
+  .compare-cell.rlhf ul li::before { background: var(--red); }
+  .compare-cell.rlvr ul li::before { background: var(--green); }
+
+  /* algorithm cards */
+  .algo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 2rem;
+    margin: 1.5rem 0;
+    position: relative;
+  }
+
+  .algo-card .algo-name {
+    font-family: var(--serif);
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--accent);
+    margin-bottom: 0.25rem;
+  }
+
+  .algo-card .algo-file {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-bottom: 1.25rem;
+  }
+
+  .algo-card ol {
+    padding-left: 1.5rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+  }
+
+  .algo-card ol li {
+    padding: 0.2rem 0;
+  }
+
+  .algo-card .math {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 1rem 1.25rem;
+    margin-top: 1.25rem;
+    font-size: 0.8rem;
+    color: var(--blue);
+    overflow-x: auto;
+  }
+
+  /* code blocks */
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    line-height: 1.8;
+    margin: 1.5rem 0;
+    color: var(--text-dim);
+    tab-size: 4;
+  }
+
+  pre .kw { color: var(--blue); }
+  pre .fn { color: var(--accent); }
+  pre .st { color: var(--green); }
+  pre .cm { color: #4a4a56; }
+  pre .nr { color: var(--red); }
+  pre .op { color: #8a8a96; }
+
+  /* quickstart */
+  .terminal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+  }
+
+  .terminal .line {
+    display: flex;
+    align-items: baseline;
+    padding: 0.15rem 0;
+  }
+
+  .terminal .prompt-char {
+    color: var(--text-dim);
+    margin-right: 0.75rem;
+    user-select: none;
+  }
+
+  .terminal .cmd { color: var(--text); }
+  .terminal .comment { color: #4a4a56; font-style: italic; }
+
+  /* structure */
+  .tree {
+    font-size: 0.8rem;
+    line-height: 2;
+    color: var(--text-dim);
+  }
+
+  .tree .dir { color: var(--blue); }
+  .tree .file { color: var(--text); }
+  .tree .desc { color: #4a4a56; }
+
+  /* footer */
+  footer {
+    padding: 3rem 0 6rem;
+    color: var(--text-dim);
+    font-size: 0.75rem;
+  }
+
+  footer a {
+    color: var(--text-dim);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s;
+  }
+
+  footer a:hover { border-color: var(--text-dim); }
+
+  .refs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  /* fade-in */
+  .fade {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: fadeUp 0.5s ease forwards;
+  }
+
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .fade:nth-child(1) { animation-delay: 0.05s; }
+  .fade:nth-child(2) { animation-delay: 0.12s; }
+  .fade:nth-child(3) { animation-delay: 0.19s; }
+  .fade:nth-child(4) { animation-delay: 0.26s; }
+  .fade:nth-child(5) { animation-delay: 0.33s; }
+
+  @media (max-width: 600px) {
+    h1 { font-size: 2.2rem; }
+    .compare { grid-template-columns: 1fr; }
+    header { padding: 4rem 0 3rem; }
+    section { padding: 3rem 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <div class="label fade">Reinforcement Learning with Verifiable Rewards</div>
+    <h1 class="fade">nano-rlvr</h1>
+    <p class="fade">
+      Minimal implementation of RLVR &mdash; the technique behind DeepSeek-R1.
+      Single GPU, no infra bloat, readable top-to-bottom. nanoGPT for RL alignment.
+    </p>
+    <div class="links fade">
+      <a href="https://github.com/karinazad/nano-rlvr">GitHub</a>
+    </div>
+  </header>
+
+  <section>
+    <div class="section-label fade">The idea</div>
+
+    <div class="compare fade">
+      <div class="compare-cell rlhf">
+        <div class="tag old">RLHF</div>
+        <ul>
+          <li>Train a reward model from human preferences</li>
+          <li>Reward model can be gamed or miscalibrated</li>
+          <li>Expensive data collection</li>
+          <li>Reward is a neural net forward pass</li>
+        </ul>
+      </div>
+      <div class="compare-cell rlvr">
+        <div class="tag new">RLVR</div>
+        <ul>
+          <li>Verify answers programmatically</li>
+          <li>Reward is exact: right or wrong</li>
+          <li>No preference data needed</li>
+          <li>Reward is a function call</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="dim fade">
+      RLVR works for tasks with checkable answers &mdash; math, logic, code.
+      The model gets a problem, generates a solution, and the reward is 1 if correct, 0 if not.
+      This has been shown to elicit chain-of-thought reasoning from base models.
+    </p>
+  </section>
+
+  <section>
+    <div class="section-label fade">Algorithms</div>
+
+    <div class="algo-card fade">
+      <div class="algo-name">REINFORCE</div>
+      <div class="algo-file">train_reinforce.py</div>
+      <ol>
+        <li>Generate a completion for each prompt</li>
+        <li>Check the answer &mdash; reward = 0 or 1</li>
+        <li>Subtract a running baseline to reduce variance</li>
+        <li>Policy gradient update + KL penalty against reference</li>
+      </ol>
+      <div class="math">
+        loss = -(reward - baseline) &times; log&thinsp;&pi;(completion) + &beta; &middot; KL(&pi; || &pi;<sub>ref</sub>)
+      </div>
+    </div>
+
+    <div class="algo-card fade">
+      <div class="algo-name">GRPO</div>
+      <div class="algo-file">train_grpo.py &mdash; the DeepSeek-R1 algorithm</div>
+      <ol>
+        <li>Generate K completions per prompt (a &ldquo;group&rdquo;)</li>
+        <li>Compute rewards for each completion</li>
+        <li>Advantages = normalize rewards within the group</li>
+        <li>PPO-style clipped surrogate optimization</li>
+        <li>Multiple epochs per batch + KL penalty</li>
+      </ol>
+      <div class="math">
+        adv<sub>i</sub> = (r<sub>i</sub> - mean(r<sub>group</sub>)) / std(r<sub>group</sub>)<br>
+        ratio = &pi;(a|s) / &pi;<sub>old</sub>(a|s)<br>
+        loss = -min(ratio &middot; adv, clip(ratio, 1&minus;&epsilon;, 1+&epsilon;) &middot; adv)
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-label fade">Code</div>
+
+    <h3>GRPO training loop</h3>
+<pre class="fade"><span class="kw">for</span> step <span class="kw">in</span> <span class="fn">range</span>(<span class="nr">1</span>, cfg.max_steps + <span class="nr">1</span>):
+    problems = <span class="fn">generate_fn</span>(cfg.batch_size)
+    gen = <span class="fn">generate_completions</span>(model, tokenizer, prompts,
+        num_samples=cfg.group_size)
+
+    rewards = <span class="fn">score_completions</span>(gen[<span class="st">"completions"</span>], prompts, answers, cfg.task)
+    advantages = <span class="fn">compute_group_advantages</span>(rewards_t, cfg.batch_size, cfg.group_size)
+
+    <span class="cm"># PPO-style multi-epoch optimization</span>
+    <span class="kw">for</span> _ <span class="kw">in</span> <span class="fn">range</span>(cfg.num_epochs_per_batch):
+        curr_logps = <span class="fn">forward_logps</span>(model, full_ids, full_mask, prompt_len, comp_len)
+        ratio = torch.<span class="fn">exp</span>(curr_seq_logps - old_seq_logps)
+
+        surr1 = ratio <span class="op">*</span> advantages
+        surr2 = torch.<span class="fn">clamp</span>(ratio, <span class="nr">1</span> - cfg.clip_epsilon,
+                               <span class="nr">1</span> + cfg.clip_epsilon) <span class="op">*</span> advantages
+        policy_loss = <span class="op">-</span>torch.<span class="fn">min</span>(surr1, surr2).<span class="fn">mean</span>()
+        loss = policy_loss + cfg.kl_coef <span class="op">*</span> <span class="fn">kl_penalty</span>(<span class="op">...</span>)
+
+        optimizer.<span class="fn">zero_grad</span>()
+        loss.<span class="fn">backward</span>()
+        optimizer.<span class="fn">step</span>()</pre>
+
+    <h3>Verifiable reward</h3>
+<pre class="fade"><span class="kw">def</span> <span class="fn">check_arithmetic</span>(completion, expected_answer):
+    <span class="cm">"""Parse completion, extract final number, return 1.0 or 0.0."""</span>
+    extracted = <span class="fn">_extract_number</span>(completion)  <span class="cm"># \boxed{}, after =, last number</span>
+    <span class="kw">if</span> extracted <span class="kw">is</span> <span class="kw">None</span>:
+        <span class="kw">return</span> <span class="nr">0.0</span>
+    <span class="kw">return</span> <span class="nr">1.0</span> <span class="kw">if</span> <span class="fn">abs</span>(extracted - expected_answer) < <span class="nr">1e-6</span> <span class="kw">else</span> <span class="nr">0.0</span></pre>
+  </section>
+
+  <section>
+    <div class="section-label fade">Quickstart</div>
+
+    <div class="terminal fade">
+      <div class="line"><span class="prompt-char">$</span> <span class="cmd">uv sync</span></div>
+      <div class="line"><span class="prompt-char">$</span> <span class="cmd">python train_reinforce.py</span> <span class="comment">&nbsp;# simplest algorithm</span></div>
+      <div class="line"><span class="prompt-char">$</span> <span class="cmd">python train_grpo.py</span> <span class="comment">&nbsp;# DeepSeek-R1 algorithm</span></div>
+    </div>
+
+    <p class="dim fade">
+      Reward climbs over ~100&ndash;200 steps. Sample completions are printed periodically &mdash;
+      watch the model start reasoning step by step. Falls back to CPU if no CUDA.
+    </p>
+  </section>
+
+  <section>
+    <div class="section-label fade">Structure</div>
+    <div class="tree fade">
+      <span class="dir">src/nano_rlvr/</span><br>
+      &nbsp;&nbsp;<span class="file">model.py</span> <span class="desc">&mdash; model loading, batched generation with log-probs</span><br>
+      &nbsp;&nbsp;<span class="file">rewards.py</span> <span class="desc">&mdash; verifiable reward functions</span><br>
+      &nbsp;&nbsp;<span class="file">data.py</span> <span class="desc">&mdash; online problem generators (arithmetic, countdown)</span><br>
+      &nbsp;&nbsp;<span class="file">utils.py</span> <span class="desc">&mdash; KL divergence, advantages, shared training helpers</span><br>
+      <br>
+      <span class="file">train_reinforce.py</span> <span class="desc">&mdash; REINFORCE + verifiable rewards</span><br>
+      <span class="file">train_grpo.py</span> <span class="desc">&mdash; GRPO (DeepSeek-R1)</span>
+    </div>
+    <p class="dim fade" style="margin-top: 1.5rem;">
+      Qwen2.5-0.5B via HuggingFace transformers. No DeepSpeed, no FSDP, no vLLM.
+      No trainer classes. Just functions and a for-loop.
+    </p>
+  </section>
+
+  <footer>
+    <div class="refs">
+      <a href="https://arxiv.org/abs/2501.12948">DeepSeek-R1 &mdash; GRPO + RLVR for reasoning</a>
+      <a href="https://arxiv.org/abs/2402.03300">DeepSeek-Math &mdash; original GRPO paper</a>
+      <a href="https://github.com/karpathy/nanoGPT">nanoGPT &mdash; inspiration</a>
+    </div>
+  </footer>
+
+</div>
+
+</body>
+</html>

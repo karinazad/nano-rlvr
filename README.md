@@ -1,10 +1,7 @@
 # nano-rlvr
 
-Minimal implementation of Reinforcement Learning with Verifiable Rewards (RLVR) — the technique behind [DeepSeek-R1](https://arxiv.org/abs/2501.12948). nanoGPT-style: single GPU, no infra bloat, readable top-to-bottom.
+Minimal implementation of Reinforcement Learning with Verifiable Rewards (RLVR) — used e.g in [DeepSeek-R1](https://arxiv.org/abs/2501.12948). nanoGPT-style: single GPU, minimal infra, and readable top-to-bottom.
 
-## What is RLVR?
-
-In RLHF you train a reward model from human preferences. RLVR skips that — rewards come from programmatic verification (did the model get the math problem right?). No reward model, no preference data. Just a function that returns 0 or 1.
 
 ## Algorithms
 
